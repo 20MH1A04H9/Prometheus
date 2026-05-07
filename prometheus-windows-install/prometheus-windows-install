@@ -1,0 +1,342 @@
+# 📁 Project Structure
+
+```bash
+prometheus-windows-install/
+│
+├── README.md
+├── configs/
+│   └── prometheus.yml
+│
+├── scripts/
+│   ├── install-prometheus.ps1
+│   ├── install-nssm.ps1
+│   └── start-prometheus.bat
+│
+├── docs/
+│   ├── architecture.md
+│   ├── troubleshooting.md
+│   └── screenshots/
+│       ├── nssm-install.png
+│       └── prometheus-dashboard.png
+│
+└── exporters/
+    └── windows-exporter-install.md
+```
+
+---
+
+# 🚀 Install Prometheus on Windows Server
+
+A complete guide to installing and configuring **Prometheus on Windows Server** for infrastructure monitoring.
+
+---
+
+## 📌 Overview
+
+**Prometheus** is an open-source monitoring and alerting system used to collect metrics from:
+
+- Servers
+- Applications
+- Network devices
+- Cloud infrastructure
+
+Prometheus stores data as **time-series metrics** and supports querying using:
+
+- **PromQL**
+- **Grafana Integration**
+- **Alertmanager**
+
+---
+
+# 🏗 Prometheus Architecture
+
+```text
+Servers / Applications
+        │
+        │ Metrics
+        ▼
+Exporters (Windows Exporter / Node Exporter)
+        │
+        ▼
+Prometheus Server
+        │
+        ▼
+Alertmanager
+        │
+        ▼
+Grafana Dashboards
+```
+
+---
+
+# 📥 Step 1: Download Prometheus
+
+Download Prometheus from the official GitHub releases page:
+
+[Prometheus Releases](https://github.com/prometheus/prometheus/releases?utm_source=chatgpt.com)
+
+Download file:
+
+```bash
+prometheus-3.9.1.windows-amd64.zip
+```
+
+---
+
+# 📂 Step 2: Extract Files
+
+Create directory:
+
+```bash
+C:\Prometheus
+```
+
+Extract files inside:
+
+```bash
+C:\Prometheus
+ ├── prometheus.exe
+ ├── promtool.exe
+ ├── prometheus.yml
+ ├── consoles
+ └── console_libraries
+```
+
+---
+
+# ⚙ Step 3: Configure Prometheus
+
+Edit:
+
+```bash
+C:\Prometheus\prometheus.yml
+```
+
+Example configuration:
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+
+    static_configs:
+      - targets: ["localhost:9090"]
+```
+
+This allows Prometheus to monitor itself.
+
+---
+
+# ▶ Step 4: Run Prometheus Manually
+
+Open **PowerShell** or **Command Prompt**
+
+```powershell
+cd C:\Prometheus
+```
+
+Start Prometheus:
+
+```powershell
+prometheus.exe --config.file=prometheus.yml
+```
+
+Prometheus runs on:
+
+```bash
+http://localhost:9090
+```
+
+---
+
+# 🌐 Step 5: Access Web Interface
+
+Open browser:
+
+```bash
+http://localhost:9090
+```
+
+You should see the Prometheus dashboard.
+
+---
+
+# 🔧 Step 6: Run Prometheus as Windows Service (Recommended)
+
+Prometheus does not natively run as a Windows service, so use **NSSM**.
+
+## Download NSSM
+
+[NSSM Official Download](https://nssm.cc/download?utm_source=chatgpt.com)
+
+Extract to:
+
+```bash
+C:\nssm
+```
+
+---
+
+## Install Service
+
+Open PowerShell as Administrator:
+
+```powershell
+cd C:\nssm
+```
+
+Run:
+
+```powershell
+nssm install Prometheus
+```
+
+Set:
+
+| Field | Value |
+|--------|---------|
+| Path | C:\Prometheus\prometheus.exe |
+| Startup Directory | C:\Prometheus |
+| Arguments | --config.file=prometheus.yml |
+
+Click **Install Service**
+
+---
+
+## Start Service
+
+```powershell
+net start Prometheus
+```
+
+Verify service:
+
+```powershell
+services.msc
+```
+
+---
+
+# ✅ Verify Prometheus
+
+Open:
+
+```bash
+http://SERVER-IP:9090
+```
+
+Check targets:
+
+```bash
+Status → Targets
+```
+
+Expected:
+
+```bash
+prometheus → UP
+```
+
+---
+
+# 🖥 Add Windows Monitoring
+
+Install :contentReference[oaicite:2]{index=2} to monitor Windows servers.
+
+Default port:
+
+```bash
+9182
+```
+
+Example configuration:
+
+```yaml
+scrape_configs:
+  - job_name: "windows_servers"
+
+    static_configs:
+      - targets:
+        - "192.168.1.10:9182"
+```
+
+---
+
+# 📊 Useful PromQL Queries
+
+### CPU Usage
+
+```promql
+rate(process_cpu_seconds_total[5m])
+```
+
+### Memory Usage
+
+```promql
+process_resident_memory_bytes
+```
+
+### System Uptime
+
+```promql
+process_start_time_seconds
+```
+
+---
+
+# 🔌 Default Ports
+
+| Service | Port |
+|----------|--------|
+| Prometheus | 9090 |
+| Windows Exporter | 9182 |
+| Grafana | 3000 |
+
+---
+
+# 🏢 Recommended Monitoring Stack
+
+```text
+Windows/Linux Servers
+        │
+    Exporters
+        │
+    Prometheus
+        │
+   Alertmanager
+        │
+     Grafana
+```
+
+---
+
+# 📁 Additional Files
+
+### scripts/install-prometheus.ps1
+
+```powershell
+mkdir C:\Prometheus
+```
+
+### scripts/start-prometheus.bat
+
+```bat
+cd C:\Prometheus
+prometheus.exe --config.file=prometheus.yml
+```
+
+---
+
+# ✅ Summary
+
+Prometheus can run successfully on Windows servers for infrastructure monitoring.
+
+Combined with:
+
+- :contentReference[oaicite:3]{index=3}  
+- :contentReference[oaicite:4]{index=4}  
+- :contentReference[oaicite:5]{index=5}  
+
+…it becomes a complete enterprise monitoring solution.
