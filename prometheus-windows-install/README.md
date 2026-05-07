@@ -182,7 +182,7 @@ Prometheus can be installed as a Windows service using **NSSM**.
 
 Download NSSM:
 
-[NSSM Download](https://nssm.cc/download?utm_source=chatgpt.com)
+[NSSM Download](https://nssm.cc/download)
 
 ---
 
