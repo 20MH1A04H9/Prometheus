@@ -1,394 +1,129 @@
-<!-- PROMETHEUS NODE EXPORTER SETUP GUIDE -->
-<!-- ██████╗ ██╗   ██╗    ██╗   ██╗██╗███████╗██╗    ██╗ █████╗  -->
-<!-- ██╔══██╗╚██╗ ██╔╝    ██║   ██║██║██╔════╝██║    ██║██╔══██╗ -->
-<!-- ██████╔╝ ╚████╔╝     ██║   ██║██║███████╗██║ █╗ ██║███████║ -->
-<!-- ██╔══██╗  ╚██╔╝      ╚██╗ ██╔╝██║╚════██║██║███╗██║██╔══██║ -->
-<!-- ██████╔╝   ██║        ╚████╔╝ ██║███████║╚███╔███╔╝██║  ██║ -->
-<!-- ╚═════╝    ╚═╝         ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝ -->
+# 🖥️ Node Exporter Install
 
-<div align="center">
-
-```
-██████╗ ██████╗  ██████╗ ███╗   ███╗███████╗████████╗██╗  ██╗███████╗██╗   ██╗███████╗
-██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔════╝╚══██╔══╝██║  ██║██╔════╝██║   ██║██╔════╝
-██████╔╝██████╔╝██║   ██║██╔████╔██║█████╗     ██║   ███████║█████╗  ██║   ██║███████╗
-██╔═══╝ ██╔══██╗██║   ██║██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██╔══╝  ██║   ██║╚════██║
-██║     ██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗   ██║   ██║  ██║███████╗╚██████╔╝███████║
-╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝
-                    NODE EXPORTER // SETUP GUIDE // v1.8.1
-```
-
-<br/>
-
-[![Prometheus](https://img.shields.io/badge/◈_PROMETHEUS-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Node Exporter](https://img.shields.io/badge/◈_NODE_EXPORTER-00FF41?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/prometheus/node_exporter)
-[![Linux](https://img.shields.io/badge/◈_LINUX-1793D1?style=for-the-badge&logo=linux&logoColor=white)](https://www.linux.org/)
-[![Grafana](https://img.shields.io/badge/◈_GRAFANA-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
-[![Status](https://img.shields.io/badge/◈_STATUS-OPERATIONAL-00FF41?style=for-the-badge)](/)
-[![Author](https://img.shields.io/badge/◈_ART_BY-VISWA-blueviolet?style=for-the-badge)](/)
-
-<br/>
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  [SYS] Initializing monitoring stack...                             │
-│  [OK]  Node Exporter agent deployed on port 9100                   │
-│  [OK]  Prometheus scrape target registered                          │
-│  [OK]  Grafana dashboard connected                                  │
-│  [>>>] All systems NOMINAL — metrics pipeline ACTIVE               │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-</div>
+> Deploys the Prometheus Node Exporter on Linux-based security infrastructure hosts to expose system-level hardware and OS metrics for observability.
 
 ---
 
-## ◈ TABLE OF CONTENTS
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Folder Structure](#folder-structure)
+- [Configuration Files](#configuration-files)
+- [Collected Metrics](#collected-metrics)
+- [Security Hosts Covered](#security-hosts-covered)
+- [Alerting](#alerting)
+- [Grafana Dashboard](#grafana-dashboard)
+
+---
+
+## Overview
+
+Node Exporter runs as a **systemd service** on every Linux host that supports the cybersecurity infrastructure. It exposes kernel and hardware-level metrics that Prometheus scrapes to monitor host health, detect resource exhaustion, and trigger alerts before security tools are impacted.
+
+This folder contains the installation playbooks, systemd unit configuration, and scrape configuration for all managed Linux security hosts.
+
+---
+
+## Folder Structure
 
 ```
-[01] ─── OVERVIEW
-[02] ─── ARCHITECTURE & DATA FLOW
-[03] ─── INSTALL NODE EXPORTER
-         ├── [STEP-01] Create System User
-         ├── [STEP-02] Download Binary
-         ├── [STEP-03] Extract Files
-         └── [STEP-04] Install Binary
-[04] ─── CREATE SYSTEMD SERVICE
-[05] ─── START & ENABLE SERVICE
-[06] ─── VERIFY METRICS ENDPOINT
-[07] ─── CONFIGURE PROMETHEUS SCRAPE
-[08] ─── RESTART & VALIDATE PROMETHEUS
-[09] ─── TEST PROMQL QUERIES
-[10] ─── SUMMARY
+node-exporter-install/
+├── ansible/
+│   ├── install-node-exporter.yml    # Ansible playbook for deployment
+│   └── inventory/
+│       ├── siem-hosts               # SIEM server inventory
+│       ├── vault-hosts              # HashiCorp Vault nodes
+│       └── scanner-hosts            # Vulnerability scanner hosts
+├── systemd/
+│   └── node_exporter.service        # Systemd unit file
+├── tls/
+│   └── tls-config.yml               # Node Exporter TLS configuration
+├── prometheus-scrape.yml            # Scrape config snippet
+└── README.md
 ```
 
 ---
 
-## [01] ◈ OVERVIEW
+## Configuration Files
 
-> **Node Exporter** is an official Prometheus exporter that exposes hardware and OS-level metrics from Linux systems. It acts as a local telemetry agent, transmitting real-time system data to your Prometheus server.
+### `systemd/node_exporter.service`
 
-Metrics are served over HTTP at:
+Runs Node Exporter as a dedicated `node_exporter` system user with minimal privileges. The service is set to restart automatically on failure and starts on every boot.
 
-```bash
-http://<SERVER-IP>:9100/metrics
-```
+Enabled collectors in this deployment:
 
-### ◈ METRICS COLLECTED
-
-| Vector | Description |
+| Collector | What It Measures |
 |---|---|
-| `node_cpu_seconds_total` | CPU utilization across all cores |
-| `node_memory_MemAvailable_bytes` | Available memory in bytes |
-| `node_filesystem_size_bytes` | Disk capacity per mount point |
-| `node_network_receive_bytes_total` | Inbound network traffic |
-| `node_load1` | 1-minute system load average |
-| `node_disk_io_time_seconds_total` | Disk I/O time spent |
+| `cpu` | CPU utilization per core |
+| `diskstats` | Disk I/O throughput and latency |
+| `filesystem` | Disk space and inode usage |
+| `meminfo` | Memory usage, swap, cache |
+| `netdev` | Network interface traffic |
+| `systemd` | Systemd unit states |
+| `processes` | Running process count and states |
+| `interrupts` | Hardware interrupt rates |
+
+### `tls/tls-config.yml`
+
+Node Exporter is configured to serve its metrics endpoint over **HTTPS with mutual TLS**, so that only the Prometheus server can scrape it. Certificates are issued by the internal CA and managed by cert-manager.
 
 ---
 
-## [02] ◈ ARCHITECTURE & DATA FLOW
+## Collected Metrics
 
-```
-╔══════════════════════════════════════════════════════════╗
-║                   MONITORING STACK                       ║
-╠══════════════════════════════════════════════════════════╣
-║                                                          ║
-║   ┌──────────────────────────────────────────────────┐  ║
-║   │   LINUX SERVER(S) — Target Hosts                 │  ║
-║   │   ┌─────────────────────────────────────────┐   │  ║
-║   │   │  NODE EXPORTER  ░░ :9100/metrics        │   │  ║
-║   │   └────────────────────┬────────────────────┘   │  ║
-║   └────────────────────────┼───────────────────────-┘  ║
-║                            │  HTTP PULL (scrape)        ║
-║                            ▼                            ║
-║   ┌──────────────────────────────────────────────────┐  ║
-║   │   PROMETHEUS SERVER  ░░ :9090                    │  ║
-║   │   Time-Series Database & Query Engine            │  ║
-║   └────────────────────────┬─────────────────────────┘  ║
-║                            │                            ║
-║              ┌─────────────┴──────────┐                 ║
-║              ▼                        ▼                 ║
-║   ┌──────────────────┐   ┌────────────────────────┐    ║
-║   │  ALERTMANAGER    │   │   GRAFANA DASHBOARD    │    ║
-║   │  :9093           │   │   :3000                │    ║
-║   └──────────────────┘   └────────────────────────┘    ║
-║                                                          ║
-╚══════════════════════════════════════════════════════════╝
-```
+Key metrics used in security observability alerting:
+
+| Metric | Alert Condition |
+|---|---|
+| `node_cpu_seconds_total` | CPU saturation > 90% for 10 min |
+| `node_memory_MemAvailable_bytes` | Available memory < 10% |
+| `node_filesystem_avail_bytes` | Disk free < 15% on any partition |
+| `node_disk_io_time_seconds_total` | I/O utilization > 95% |
+| `node_network_receive_drop_total` | Packet drops increasing |
+| `node_systemd_unit_state` | Critical service unit not `active` |
+| `node_load1` | 1-minute load > CPU count × 2 |
 
 ---
 
-## [03] ◈ INSTALL NODE EXPORTER
+## Security Hosts Covered
 
-> Official releases: [github.com/prometheus/node_exporter/releases](https://github.com/prometheus/node_exporter/releases)
+Node Exporter is deployed to all Linux hosts running security infrastructure components:
 
-### ▸ STEP-01 — Create Dedicated System User
-
-```bash
-sudo useradd --no-create-home --shell /bin/false node_exporter
-```
-
-> **[WHY]** Running Node Exporter under a dedicated unprivileged user follows the principle of least privilege — a core security hardening practice.
-
----
-
-### ▸ STEP-02 — Download Node Exporter Binary
-
-```bash
-cd /tmp
-
-wget https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz
-```
+| Host Group | Role |
+|---|---|
+| SIEM Nodes | Splunk indexers, Elastic data nodes |
+| Vault Cluster | HashiCorp Vault primary and secondary |
+| Vulnerability Scanners | Tenable Nessus, Qualys scanner appliances |
+| Log Aggregators | Rsyslog, Fluentd, Logstash forwarders |
+| Security Jump Hosts | Bastion / PAM-managed access hosts |
+| Falco Nodes | Container runtime security agents |
 
 ---
 
-### ▸ STEP-03 — Extract Archive
+## Alerting
 
-```bash
-tar -xvf node_exporter-1.8.1.linux-amd64.tar.gz
+Alert rules referencing Node Exporter metrics are located in the main Prometheus rules folder under `rules/node-alerts.yml`.
 
-cd node_exporter-1.8.1.linux-amd64
-```
-
----
-
-### ▸ STEP-04 — Install Binary & Set Permissions
-
-```bash
-sudo cp node_exporter /usr/local/bin/
-
-sudo chown node_exporter:node_exporter /usr/local/bin/node_exporter
-```
-
-**Verify installation:**
-
-```bash
-node_exporter --version
-```
-
-Expected output:
-```
-node_exporter, version 1.8.1 (branch: HEAD, ...)
-```
+| Alert | Condition | Severity |
+|---|---|---|
+| `HostHighCPU` | CPU > 90% for 10 min | high |
+| `HostLowMemory` | Available memory < 10% | high |
+| `HostDiskFull` | Disk free < 15% | critical |
+| `HostDown` | Node Exporter unreachable | critical |
+| `HostServiceCrashed` | Systemd unit in `failed` state | critical |
+| `HostHighLoad` | Load average > 2× CPU count | medium |
 
 ---
 
-## [04] ◈ CREATE SYSTEMD SERVICE
+## Grafana Dashboard
 
-Create the service unit file:
+The **Node Exporter Full** dashboard (Grafana ID: 1860) is provisioned and pre-filtered by security host group. It provides:
 
-```bash
-sudo nano /etc/systemd/system/node_exporter.service
-```
-
-Paste the following configuration:
-
-```ini
-[Unit]
-Description=Prometheus Node Exporter
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-User=node_exporter
-Group=node_exporter
-Type=simple
-ExecStart=/usr/local/bin/node_exporter
-
-# Auto-restart on failure
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
+- Per-host CPU, memory, disk, and network utilization
+- Systemd service health at a glance
+- I/O saturation heatmaps
+- Network traffic anomaly detection (sudden spikes)
 
 ---
 
-## [05] ◈ START & ENABLE SERVICE
-
-```bash
-# Reload systemd to register the new service
-sudo systemctl daemon-reload
-
-# Enable service to start on boot
-sudo systemctl enable node_exporter
-
-# Start the service
-sudo systemctl start node_exporter
-
-# Verify service is running
-sudo systemctl status node_exporter
-```
-
-Expected output:
-```
-● node_exporter.service - Prometheus Node Exporter
-   Loaded: loaded (/etc/systemd/system/node_exporter.service; enabled)
-   Active: active (running) since ...
-```
-
----
-
-## [06] ◈ VERIFY METRICS ENDPOINT
-
-**From the server (CLI):**
-
-```bash
-curl http://localhost:9100/metrics
-```
-
-**From browser:**
-
-```
-http://<SERVER-IP>:9100/metrics
-```
-
-You should see a stream of metrics like:
-
-```bash
-# HELP node_cpu_seconds_total Seconds the CPUs spent in each mode
-# TYPE node_cpu_seconds_total counter
-node_cpu_seconds_total{cpu="0",mode="idle"} 12345.67
-
-node_memory_MemAvailable_bytes 4294967296
-node_filesystem_size_bytes{...} 107374182400
-node_network_receive_bytes_total{device="eth0"} 892341
-```
-
-> **[SYS]** If the endpoint is unreachable, check firewall rules: `sudo ufw allow 9100/tcp`
-
----
-
-## [07] ◈ CONFIGURE PROMETHEUS SCRAPE TARGET
-
-Edit the Prometheus config:
-
-```bash
-sudo nano /etc/prometheus/prometheus.yml
-```
-
-### Single Server
-
-```yaml
-scrape_configs:
-  - job_name: "node_exporter"
-    static_configs:
-      - targets: ["192.168.x.x:9100"]
-```
-
-### Multiple Servers
-
-```yaml
-scrape_configs:
-  - job_name: "linux_servers"
-    static_configs:
-      - targets:
-          - "192.168.1.10:9100"   # web-server-01
-          - "192.168.1.11:9100"   # db-server-01
-          - "192.168.1.12:9100"   # app-server-01
-```
-
-> **[TIP]** Use labels to categorize your targets for easier filtering in Grafana:
-> ```yaml
->         labels:
->           env: "production"
->           role: "webserver"
-> ```
-
----
-
-## [08] ◈ RESTART & VALIDATE PROMETHEUS
-
-```bash
-# Restart Prometheus to apply new config
-sudo systemctl restart prometheus
-
-# Confirm service is healthy
-sudo systemctl status prometheus
-```
-
-**Validate in Prometheus UI:**
-
-```
-http://<SERVER-IP>:9090
-```
-
-Navigate to:
-
-```
-Status  ──►  Targets
-```
-
-Expected state:
-
-```
-┌─────────────────────────────────────────────────────┐
-│  Job: node_exporter          State: ● UP            │
-│  Endpoint: http://192.168.x.x:9100/metrics          │
-│  Last Scrape: 0.123s ago     Labels: {...}           │
-└─────────────────────────────────────────────────────┘
-```
-
----
-
-## [09] ◈ TEST PROMQL QUERIES
-
-Open Prometheus UI → **Graph** tab and run:
-
-```promql
-# CPU usage percentage per core
-100 - (avg by(cpu) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
-
-# Available memory in GB
-node_memory_MemAvailable_bytes / 1024 / 1024 / 1024
-
-# Disk usage percentage
-(node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100
-
-# Network receive rate (bytes/sec)
-rate(node_network_receive_bytes_total[5m])
-
-# System load average (1 min)
-node_load1
-```
-
----
-
-## [10] ◈ SUMMARY
-
-```
-╔══════════════════════════════════════════════════════╗
-║              DEPLOYMENT CHECKLIST                    ║
-╠══════════════════════════════════════════════════════╣
-║  [✔] node_exporter user created (least privilege)   ║
-║  [✔] Binary downloaded & installed to /usr/local/   ║
-║  [✔] Ownership set to node_exporter:node_exporter   ║
-║  [✔] Systemd service created & enabled              ║
-║  [✔] Service started & verified active              ║
-║  [✔] Metrics endpoint accessible on :9100           ║
-║  [✔] Prometheus scrape target configured            ║
-║  [✔] Prometheus restarted & target showing UP       ║
-║  [✔] PromQL queries validated in UI                 ║
-╚══════════════════════════════════════════════════════╝
-```
-
-> **[SYS]** Monitoring pipeline fully operational. All telemetry agents nominal.
-
----
-
-<div align="center">
-
-```
-┌────────────────────────────────────────────┐
-│                                            │
-│    ◈  Crafted with precision by Viswa  ◈   │
-│    ◈  Prometheus • Node Exporter Guide ◈   │
-│                                            │
-└────────────────────────────────────────────┘
-```
-
-[![Star this repo](https://img.shields.io/badge/⭐_STAR_THIS_REPO-If_it_helped_you-FFD700?style=for-the-badge)](/)
-
-</div>
+> **Security Note:** The Node Exporter metrics endpoint must never be exposed to the internet. Firewall rules restrict port `9100` to the Prometheus server IP only, enforced by both OS-level `iptables` and Kubernetes NetworkPolicy where applicable.
