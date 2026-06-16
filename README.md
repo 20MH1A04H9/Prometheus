@@ -1,411 +1,276 @@
-# 🚀 Prometheus Monitoring System
+# 🔒 Prometheus Enterprise Observability
 
-![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus-orange)
-![Ubuntu](https://img.shields.io/badge/OS-Ubuntu-blue)
-![Architecture](https://img.shields.io/badge/Architecture-amd64-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
-
-A complete guide to installing and configuring **Prometheus Monitoring System** on **Ubuntu Server (amd64)**.
+> **Enterprise-grade monitoring, alerting, and observability stack for cybersecurity infrastructure.**  
+> Powered by [Prometheus](https://prometheus.io/) · Built for scale · Secured by design.
 
 ---
 
-## 📌 Table of Contents
+## 📋 Table of Contents
 
-- [Introduction](#-introduction)
-- [Key Features](#-key-features)
-- [Architecture](#-architecture)
-- [Prometheus Components](#-prometheus-components)
-- [Data Flow](#-data-flow)
-- [Installation Guide](#-installation-guide)
-- [Access Prometheus UI](#-access-prometheus-ui)
-- [Verify Metrics](#-verify-metrics)
-- [Default Ports](#-default-ports)
-- [Production Architecture](#-production-architecture)
-- [Use Cases](#-use-cases)
-- [Summary](#-summary)
-
----
-
-# 📖 Introduction
-
-## What is Prometheus?
-
-**Prometheus** is an open-source monitoring and alerting toolkit originally developed by **SoundCloud**.
-
-It is widely used for monitoring:
-
-- Servers
-- Applications
-- Containers
-- Kubernetes
-- Cloud Infrastructure
-
-Prometheus collects metrics from configured targets at regular intervals, stores them as **time-series data**, and allows users to query them using:
-
-### PromQL (Prometheus Query Language)
-
-Prometheus is commonly integrated with:
-
-- **Grafana** → Visualization
-- **Alertmanager** → Alerts & Notifications
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Cybersecurity Exporters & Integrations](#cybersecurity-exporters--integrations)
+- [Alerting Rules](#alerting-rules)
+- [Dashboards](#dashboards)
+- [Security Best Practices](#security-best-practices)
+- [High Availability](#high-availability)
+- [Retention & Storage](#retention--storage)
+- [Access Control & RBAC](#access-control--rbac)
+- [Runbooks](#runbooks)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-# ✨ Key Features
+## Overview
 
-✅ Time-series metrics storage  
-✅ Powerful query language (**PromQL**)  
-✅ Built-in alerting system  
-✅ Pull-based metrics collection  
-✅ Service discovery support  
-✅ Multi-dimensional data model (labels)  
-✅ Kubernetes integration  
-✅ Linux/Windows monitoring support  
+This repository provides the **enterprise Prometheus observability stack** used to monitor all cybersecurity tooling across the organization. It enables:
+
+- **Real-time visibility** into security tool health, performance, and signal quality
+- **Unified alerting** across SIEM, EDR, WAF, IDS/IPS, vulnerability scanners, and identity systems
+- **Audit-ready metrics** for compliance (SOC 2, ISO 27001, PCI-DSS, NIST CSF)
+- **SLA tracking** for security operations and incident response pipelines
+
+### Monitored Security Tool Categories
+
+| Category | Tools |
+|---|---|
+| SIEM | Splunk, Elastic SIEM, Microsoft Sentinel |
+| EDR / XDR | CrowdStrike Falcon, SentinelOne, Microsoft Defender |
+| Vulnerability Management | Tenable.io, Qualys, Rapid7 InsightVM |
+| WAF / DDoS Protection | Cloudflare, AWS WAF, Akamai |
+| Identity & Access | Okta, CyberArk PAM, Azure AD |
+| Network Security | Palo Alto NGFW, Cisco FTD, Zeek IDS |
+| Secret & Key Management | HashiCorp Vault, AWS Secrets Manager |
+| Container Security | Falco, Aqua Security, Prisma Cloud |
 
 ---
 
-# 🏗 Architecture
+## Architecture
 
-Prometheus follows a **pull-based monitoring architecture**.
-
-```text
-                +----------------------+
-                |     Applications     |
-                | (Node Exporter, App) |
-                +----------+-----------+
-                           |
-                           | HTTP Metrics
-                           v
-                   +---------------+
-                   |  Prometheus   |
-                   |    Server     |
-                   |---------------|
-                   | Scraping      |
-                   | TSDB Storage  |
-                   | Query Engine  |
-                   +-------+-------+
-                           |
-            +--------------+--------------+
-            |                             |
-            v                             v
-    +--------------+             +----------------+
-    | Alertmanager |             |    Grafana     |
-    | Alert Engine |             | Visualization  |
-    +--------------+             +----------------+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          SECURITY DATA SOURCES                               │
+│                                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │    SIEM     │  │   EDR/XDR   │  │  Vuln Mgmt  │  │     WAF     │        │
+│  │  Exporters  │  │  Exporters  │  │  Exporters  │  │  Exporters  │        │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
+│         │                │                │                │               │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │  Identity   │  │   Network   │  │   Secrets   │  │  Container  │        │
+│  │  Exporters  │  │  Exporters  │  │  Exporters  │  │  Exporters  │        │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
+│         └────────────────┴────────────────┴────────────────┘               │
+│                                    │  scrape over mTLS                      │
+└────────────────────────────────────┼─────────────────────────────────────────┘
+                                     │
+┌────────────────────────────────────▼─────────────────────────────────────────┐
+│                        PROMETHEUS ENTERPRISE CORE                            │
+│                                                                              │
+│   ┌──────────────────────┐              ┌────────────────────────────────┐  │
+│   │    Prometheus A      │              │      Alertmanager Cluster      │  │
+│   │    (Primary)         │──── alerts ─▶│  ┌────────────┐ ┌───────────┐ │  │
+│   └──────────────────────┘              │  │   Node 0   │ │  Node 1   │ │  │
+│   ┌──────────────────────┐              │  └────────────┘ └───────────┘ │  │
+│   │    Prometheus B      │──── alerts ─▶│       gossip state sync        │  │
+│   │    (Replica)         │              └───────────────┬────────────────┘  │
+│   └──────────────────────┘                             │                   │
+│              │                                         ▼                   │
+│              ▼                          ┌────────────────────────────────┐  │
+│   ┌──────────────────────┐              │      Notification Routing      │  │
+│   │    Thanos Sidecar    │              │  PagerDuty · Slack · OpsGenie  │  │
+│   │    (Block Upload)    │              └────────────────────────────────┘  │
+│   └──────────┬───────────┘                                                  │
+└──────────────┼───────────────────────────────────────────────────────────────┘
+               │
+┌──────────────▼───────────────────────────────────────────────────────────────┐
+│                         STORAGE & VISUALIZATION                              │
+│                                                                              │
+│   ┌──────────────────────┐              ┌────────────────────────────────┐  │
+│   │     Thanos Query     │──────────── ▶│       Grafana Dashboards        │  │
+│   │     (Global View)    │              │  Security · Compliance · SLA   │  │
+│   └──────────────────────┘              └────────────────────────────────┘  │
+│              │                                                               │
+│              ▼                                                               │
+│   ┌──────────────────────────────────────────────┐                          │
+│   │               Object Storage                 │                          │
+│   │   Hot (15d) ──▶ Warm (90d) ──▶ Cold (1yr+)   │                          │
+│   │       S3 / GCS      ·      Glacier / Nearline │                          │
+│   └──────────────────────────────────────────────┘                          │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-# ⚙️ Prometheus Components
+## Prerequisites
 
-## 1. Prometheus Server
-
-Core component responsible for:
-
-- Scraping metrics
-- Storing time-series data
-- Running queries
-- Triggering alerts
+| Requirement | Minimum Version | Notes |
+|---|---|---|
+| Prometheus | v2.50+ | LTS recommended |
+| Alertmanager | v0.27+ | Clustered mode |
+| Grafana | v10.3+ | For dashboards |
+| Thanos / Cortex | Latest stable | For HA & long-term storage |
+| Kubernetes | K8s 1.28+ | Production deployment target |
+| TLS Certificates | — | mTLS between all components |
 
 ---
 
-## 2. Exporters
+## Cybersecurity Exporters & Integrations
 
-Exporters expose system/application metrics.
+All security tools expose metrics via dedicated exporters that Prometheus scrapes on a defined interval over mTLS.
 
-### Common Exporters:
+| Exporter | Port | Scrape Interval | Metrics Provided |
+|---|---|---|---|
+| crowdstrike-exporter | 9118 | 60s | Agent health, detection counts, policy status |
+| sentinelone-exporter | 9119 | 60s | Threat detections, agent connectivity, rollback events |
+| tenable-exporter | 9120 | 120s | Vulnerability counts by severity, scan completion rates |
+| falco-exporter | 9376 | 30s | Runtime security events, rule match rates |
+| vault-exporter | built-in | 30s | Secret leases, token TTL, seal status |
+| okta-exporter | 9145 | 120s | MFA failures, suspended users, policy violations |
+| waf-exporter | 9121 | 30s | Blocked requests, rule triggers, bot traffic ratios |
+| qualys-exporter | 9122 | 120s | Asset coverage, critical CVE counts, scan freshness |
 
-- Node Exporter → Linux metrics
-- Windows Exporter → Windows metrics
-- MySQL Exporter
-- Nginx Exporter
+---
 
-Example:
+## Alerting Rules
 
-```bash
-http://<server-ip>:9100/metrics
+Alerts are grouped by security domain and defined with severity labels, team ownership, and runbook links. Every critical and high alert includes a suppression duration to reduce transient noise, and an annotation pointing to the operational runbook.
+
+Key alert domains covered:
+
+- **EDR Health** — agent coverage thresholds, detection pipeline latency
+- **Vault Security** — seal status, token expiry, replication lag
+- **Vulnerability Management** — critical CVE spike rates, scan staleness
+- **Identity & Access** — MFA failure surges, privileged account anomalies
+- **WAF / DDoS** — block rate anomalies, rule trigger spikes
+- **SIEM Ingestion** — event pipeline lag, indexing failure rates
+- **Container Runtime** — Falco rule matches, syscall anomaly rates
+
+### Alert Severity Matrix
+
+| Severity | Response SLA | Notification Channel |
+|---|---|---|
+| critical | 15 minutes | PagerDuty (on-call) + Slack #sec-alerts-critical |
+| high | 1 hour | Slack #sec-alerts-high + Jira ticket auto-created |
+| medium | 4 hours | Slack #sec-alerts-medium |
+| low | Next business day | Jira ticket only |
+
+---
+
+## Dashboards
+
+Pre-built Grafana dashboards are provisioned automatically and all are version-controlled in this repository.
+
+| Dashboard | Description |
+|---|---|
+| cybersec-overview | Executive summary — coverage, detections, SLA health |
+| edr-health | EDR agent connectivity and detection pipeline throughput |
+| vuln-management | Vulnerability trends by severity and asset group |
+| identity-security | MFA failures, privileged access events, account anomalies |
+| vault-operations | Secret leases, token health, replication lag |
+| runtime-security | Falco events, container anomalies, syscall rule matches |
+| compliance-posture | Control coverage mapping for SOC 2 and PCI-DSS |
+| incident-response | MTTD, MTTR, alert volume trends, on-call load |
+
+---
+
+## Security Best Practices
+
+### mTLS Everywhere
+
+All Prometheus scrape connections and Alertmanager cluster communication are secured with mutual TLS. Certificate lifecycle is managed by cert-manager with automatic rotation. The `insecure_skip_verify` flag is never set to true in any environment.
+
+### Secrets Management
+
+All credentials — API keys, bearer tokens, and scrape secrets — are injected at runtime via Kubernetes Secrets or the Vault Agent Sidecar. No credentials are hardcoded in configuration files or committed to the repository. Scrape tokens rotate every 24 hours via Vault dynamic secrets.
+
+### Network Policies
+
+Kubernetes NetworkPolicies enforce that only Prometheus pods may initiate connections to exporter pods on their metrics ports. No exporter is reachable from outside the monitoring namespace.
+
+### Audit Logging
+
+All Prometheus API access events and configuration change operations are forwarded to the central SIEM via the audit sidecar, providing a complete trail for compliance reviews.
+
+---
+
+## High Availability
+
+Two Prometheus replicas run with hard pod anti-affinity to ensure they land on separate nodes. Thanos Sidecar ships blocks to object storage and Thanos Query provides a unified, deduplicated view across both replicas. Alertmanager runs as a three-node cluster with gossip-based state synchronization to prevent duplicate notifications.
+
 ```
-
----
-
-## 3. Alertmanager
-
-Handles alerts generated by Prometheus.
-
-### Features:
-
-- Alert deduplication
-- Alert grouping
-- Silence management
-- Notification routing
-
-### Supported Notifications:
-
-- Email
-- Slack
-- PagerDuty
-- Webhooks
-
----
-
-## 4. Grafana
-
-Grafana visualizes Prometheus metrics through dashboards.
-
-Example dashboards:
-
-- CPU Usage
-- Memory Usage
-- Disk IO
-- Network Traffic
-
----
-
-# 🔄 Data Flow
-
-```text
-Exporter → Prometheus → Storage → Query → Grafana Dashboard
-                                 ↓
-                           Alertmanager
-```
-
----
-
-# 🛠 Installation Guide (Ubuntu Server amd64)
-
-## Step 1: Update System
-
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
----
-
-## Step 2: Create Prometheus User
-
-```bash
-sudo useradd --no-create-home --shell /bin/false prometheus
-```
-
----
-
-## Step 3: Create Required Directories
-
-```bash
-sudo mkdir /etc/prometheus
-sudo mkdir /var/lib/prometheus
-```
-
-Set permissions:
-
-```bash
-sudo chown prometheus:prometheus /etc/prometheus
-sudo chown prometheus:prometheus /var/lib/prometheus
-```
-
----
-
-## Step 4: Download Prometheus
-
-```bash
-cd /tmp
-wget https://github.com/prometheus/prometheus/releases/download/v3.9.1/prometheus-3.9.1.linux-amd64.tar.gz
-```
-
-Extract files:
-
-```bash
-tar xvf prometheus-3.9.1.linux-amd64.tar.gz
-cd prometheus-3.9.1.linux-amd64
+  Prometheus A ──▶┐
+                  ├──▶ Thanos Sidecar ──▶ Thanos Query ──▶ Grafana
+  Prometheus B ──▶┘
+                               │
+                               ▼
+                    Object Storage (S3 / GCS)
+                    Long-term retention up to 1 year+
 ```
 
 ---
 
-## Step 5: Copy Binaries
+## Retention & Storage
 
-```bash
-sudo cp prometheus /usr/local/bin/
-sudo cp promtool /usr/local/bin/
-```
+| Tier | Duration | Storage Backend |
+|---|---|---|
+| Hot (local TSDB) | 15 days | SSD-backed persistent volume |
+| Warm (Thanos) | 90 days | S3 / GCS object storage |
+| Cold (archive) | 1 year+ | S3 Glacier / GCS Nearline |
 
-Set ownership:
-
-```bash
-sudo chown prometheus:prometheus /usr/local/bin/prometheus
-sudo chown prometheus:prometheus /usr/local/bin/promtool
-```
+Storage sizing is based on an estimated ingestion rate of ~500K samples/second across all security exporters. Local TSDB is capped at 200 GB with overflow automatically tiered to object storage by Thanos.
 
 ---
 
-## Step 6: Copy Configuration Files
+## Access Control & RBAC
 
-```bash
-sudo cp -r consoles /etc/prometheus
-sudo cp -r console_libraries /etc/prometheus
-sudo cp prometheus.yml /etc/prometheus
-```
+Grafana access is governed by SSO via Okta SAML. Users are assigned to roles based on their team membership in Okta groups. No local Grafana accounts are permitted in production.
 
-Set permissions:
+| Role | Access Level |
+|---|---|
+| security-engineer | All dashboards, read-only Prometheus API |
+| sec-ops-analyst | Cybersec dashboards, alert acknowledgement |
+| platform-admin | Full admin access, alert rule management |
+| executive | Overview and compliance dashboards only |
 
-```bash
-sudo chown -R prometheus:prometheus /etc/prometheus
-```
-
----
-
-## Step 7: Create Systemd Service
-
-Create service file:
-
-```bash
-sudo nano /etc/systemd/system/prometheus.service
-```
-
-Add the following configuration:
-
-```ini
-[Unit]
-Description=Prometheus Monitoring Service
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-User=prometheus
-Group=prometheus
-Type=simple
-WorkingDirectory=/var/lib/prometheus
-
-ExecStart=/usr/local/bin/prometheus \
-  --config.file=/etc/prometheus/prometheus.yml \
-  --storage.tsdb.path=/var/lib/prometheus \
-  --web.console.templates=/etc/prometheus/consoles \
-  --web.console.libraries=/etc/prometheus/console_libraries
-
-Restart=always
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-```
+Prometheus's own HTTP API is accessible only within the cluster network. External access is routed exclusively through Grafana.
 
 ---
 
-## Step 8: Start Prometheus Service
+## Runbooks
 
-Reload systemd:
+Runbooks for every critical and high severity alert are maintained in the internal wiki and linked directly from each alert's annotations.
 
-```bash
-sudo systemctl daemon-reload
-```
+**Wiki root:** `https://wiki.internal/runbooks/prometheus-cybersec/`
 
-Enable service:
-
-```bash
-sudo systemctl enable prometheus
-```
-
-Start service:
-
-```bash
-sudo systemctl start prometheus
-```
-
-Check service status:
-
-```bash
-sudo systemctl status prometheus
-```
+| Alert | Runbook |
+|---|---|
+| EDR Agent Offline | https://wiki.internal/runbooks/edr-agent-offline |
+| Vault Sealed | https://wiki.internal/runbooks/vault-sealed |
+| Critical Vuln Spike | https://wiki.internal/runbooks/critical-vuln-spike |
+| MFA Failure Surge | https://wiki.internal/runbooks/mfa-failure-surge |
+| WAF Block Rate Anomaly | https://wiki.internal/runbooks/waf-block-rate |
+| SIEM Ingestion Lag | https://wiki.internal/runbooks/siem-ingestion-lag |
 
 ---
 
-# 🌐 Access Prometheus UI
+## Contributing
 
-Open your browser:
-
-```bash
-http://SERVER-IP:9090
-```
-
-Prometheus dashboard should load successfully.
+1. Create a feature branch from `main` using the prefix `feat/`, `fix/`, or `chore/`
+2. Follow the exporter naming convention documented in `docs/exporter-conventions.md`
+3. All new alert rules must include a `severity` label, a `team` label, a suppression duration, and a `runbook` annotation
+4. Validate your Prometheus config and alert rules locally using `promtool` before opening a pull request
+5. Pull requests require **2 approvals from Security Engineers** and **1 approval from a Platform Engineer** before merge
 
 ---
 
-# ✅ Verify Metrics
+## License
 
-Run the following query in Prometheus UI:
-
-```bash
-up
-```
-
-Expected result:
-
-```bash
-up = 1
-```
-
-This means the target is healthy.
+This project is licensed under the [MIT License](LICENSE).  
+Internal tooling, exporter credentials, and target configurations are **not included** in this repository and are managed separately via the secrets management pipeline.
 
 ---
 
-# 🔌 Default Ports
-
-| Service | Port |
-|----------|--------|
-| Prometheus | 9090 |
-| Node Exporter | 9100 |
-| Alertmanager | 9093 |
-| Grafana | 3000 |
-
----
-
-# 🏢 Recommended Production Architecture
-
-```text
-Servers → Node Exporter
-            ↓
-        Prometheus
-            ↓
-       Alertmanager
-            ↓
-          Grafana
-```
-
----
-
-# 🎯 Use Cases
-
-Prometheus is commonly used for:
-
-- Infrastructure Monitoring
-- Kubernetes Monitoring
-- Application Performance Monitoring
-- DevOps Observability
-- SRE Monitoring
-- Security Monitoring Integration
-
----
-
-# ✅ Summary
-
-Prometheus is a powerful **open-source monitoring solution** built for:
-
-- Reliability
-- Scalability
-- Real-time monitoring
-- Alerting
-- Observability
-
-When combined with **Grafana** and **Alertmanager**, it becomes a complete monitoring stack for modern infrastructure.
-
----
-
-## 🤝 Contributing
-
-Feel free to fork this repository and submit pull requests.
-
----
-
-## 📜 License
-
-This project is licensed under the **MIT License**.
+> **Security Notice:** If you discover a vulnerability in this observability stack, please report it via our [responsible disclosure process](https://github.com/20MH1A04H9/Prometheus/issues) — do **not** open a public GitHub issue.
