@@ -1,264 +1,153 @@
-<div align="center">
+# 🪟 Windows Exporter Setup
 
-# 🖥️ Windows Exporter Setup Guide
-
-<br/>
-
-[![Windows Exporter](https://img.shields.io/badge/◈_WINDOWS_EXPORTER-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/prometheus-community/windows_exporter)
-[![Prometheus](https://img.shields.io/badge/◈_PROMETHEUS-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/◈_GRAFANA-F46800?style=for-the-badge&logo=grafana&logoColor=white)](https://grafana.com/)
-[![Windows](https://img.shields.io/badge/◈_WINDOWS_SERVER-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://www.microsoft.com/windows)
-[![Status](https://img.shields.io/badge/◈_STATUS-OPERATIONAL-00FF41?style=for-the-badge)](/)
-[![Author](https://img.shields.io/badge/◈_AUTHOR-VISWA-blueviolet?style=for-the-badge)](/)
-
-<br/>
-
-</div>
+> Deploys and configures the Prometheus Windows Exporter on Windows Server hosts running cybersecurity infrastructure, exposing OS-level and application metrics for Prometheus scraping.
 
 ---
 
-# 📖 Introduction
+## 📋 Table of Contents
 
-This guide explains how to install **Windows Exporter** and integrate it with:
-
-- Prometheus
-- Grafana
-
-It enables Windows infrastructure monitoring using Prometheus metrics.
-
----
-
-# ✅ Prerequisites
-
-## Grafana Setup Options
-
-- [Grafana Local Setup](https://guides.hakedev.com/wiki/windows/grafana)
-- [Grafana Cloud Setup](https://guides.hakedev.com/wiki/general/grafana-cloud)
-- [Grafana Docker Setup](https://guides.hakedev.com/wiki/general/grafana-docker)
-
-## Prometheus Setup
-
-- [Prometheus Windows Service Setup](https://guides.hakedev.com/wiki/windows/prometheus-service)
+- [Overview](#overview)
+- [Folder Structure](#folder-structure)
+- [Configuration Files](#configuration-files)
+- [Enabled Collectors](#enabled-collectors)
+- [Security Host Coverage](#security-host-coverage)
+- [Collected Metrics](#collected-metrics)
+- [Alerting](#alerting)
+- [Grafana Dashboard](#grafana-dashboard)
+- [Security Hardening](#security-hardening)
 
 ---
 
-# 📥 Download Windows Exporter
+## Overview
 
-Download latest release:
+The Windows Exporter is the Windows equivalent of Node Exporter. It runs as a **Windows Service** on each monitored host and exposes hundreds of Windows-native metrics via an HTTP endpoint for Prometheus to scrape.
 
-https://github.com/prometheus-community/windows_exporter/releases
+In this deployment, Windows Exporter is the primary source of host health metrics for:
 
-Example:
+- **Active Directory Domain Controllers**
+- **CyberArk PAM Vault servers**
+- **Windows-based SIEM components**
+- **Windows jump hosts / bastion servers**
+- **Microsoft Defender-managed endpoints**
 
-```bash
-windows_exporter-0.29.2-amd64.msi
+---
+
+## Folder Structure
+
+```
+windows-exporter/
+├── config.yml                      # Windows Exporter collector configuration
+├── ansible/
+│   └── deploy-windows-exporter.yml # Ansible WinRM playbook for mass deployment
+├── prometheus-scrape.yml           # Scrape config snippet for prometheus.yml
+├── alerts/
+│   └── windows-exporter-alerts.yml # Alert rules for Windows host metrics
+├── tls/
+│   └── tls-setup.md                # HTTPS + mTLS configuration for Windows
+└── README.md
 ```
 
 ---
 
-# ⚙ Install Windows Exporter
+## Configuration Files
 
-Run the MSI installer.
+### `config.yml` — Collector Selection
 
-If prompted:
+Only the collectors relevant to cybersecurity infrastructure monitoring are enabled. Unused collectors are explicitly disabled to reduce attack surface and metrics cardinality.
 
-- Click **More Info**
-- Click **Run Anyway**
-- Allow administrator permissions
+### `prometheus-scrape.yml`
 
----
-
-# Firewall Configuration
-
-If Prometheus runs on another server:
-
-Enable firewall exception during installation.
+A ready-to-paste scrape config block for `prometheus.yml`. Includes file-based service discovery so new Windows hosts can be added by updating the targets file without reloading Prometheus.
 
 ---
 
-# Installation Path
+## Enabled Collectors
 
-```bash
-C:\Program Files\windows_exporter
-```
+| Collector | Metrics Provided | Why Enabled |
+|---|---|---|
+| `cpu` | Per-core utilization | Detect resource exhaustion on security hosts |
+| `memory` | RAM usage, page faults | Identify memory pressure on SIEM/PAM nodes |
+| `logical_disk` | Disk space, I/O rates | Alert on full log or data volumes |
+| `net` | Network throughput, errors | Detect unusual traffic on security hosts |
+| `service` | Windows service states | Alert on crashed security services |
+| `process` | Per-process CPU/memory | Identify rogue or runaway processes |
+| `os` | Uptime, user sessions | Track unauthorized sessions |
+| `system` | System calls, threads | Baseline system activity |
+| `ad` | AD object counts, errors | Domain controller health |
+| `dns` | DNS query rates, failures | DNS anomaly detection |
+| `iis` | Request rates, errors | If IIS hosts security web apps |
+| `mssql` | Query latency, connections | SIEM database monitoring |
+| `scheduled_task` | Task run states | Detect tampered scheduled tasks |
+| `textfile` | Custom metrics from files | Inject custom security tool metrics |
 
----
-
-# Configure Prometheus
-
-Edit:
-
-```bash
-prometheus.yml
-```
-
-Add:
-
-```yaml
-- job_name: "windows_exporter"
-  scrape_interval: 15s
-  static_configs:
-    - targets: ["localhost:9182"]
-```
-
-For remote host:
-
-```yaml
-- targets: ["SERVER-IP:9182"]
-```
+Disabled collectors: `exchange`, `hyperv`, `print`, `terminal_services` (not used in this environment).
 
 ---
 
-# Fix Config Issues
+## Security Host Coverage
 
-### Delete incorrect folder
-
-```bash
-C:\Program Files\windows_exporter\config
-```
-
-### Rename config file
-
-```bash
-config.yaml → config.yml
-```
-
-Final path:
-
-```bash
-C:\Program Files\windows_exporter\config.yml
-```
+| Host Group | Key Collectors Active |
+|---|---|
+| Active Directory DCs | `ad`, `dns`, `service`, `cpu`, `memory` |
+| CyberArk PAM Vault | `service`, `process`, `logical_disk`, `net` |
+| Windows SIEM Nodes | `cpu`, `memory`, `logical_disk`, `mssql` |
+| Bastion / Jump Hosts | `os`, `service`, `net`, `scheduled_task` |
+| Defender Endpoints | `service`, `process`, `scheduled_task` |
 
 ---
 
-# Restart Windows Exporter
+## Collected Metrics
 
-```bash
-net stop windows_exporter
-net start windows_exporter
-```
+Key metrics mapped to security observability use cases:
 
----
-
-# Verify Exporter
-
-Open:
-
-```bash
-http://localhost:9182/metrics
-```
-
-Check for:
-
-- windows_cpu_time_total
-- windows_memory_available_bytes
-- windows_service_status
+| Metric | Security Use Case |
+|---|---|
+| `windows_service_state` | Alert when CyberArk, Defender, or AD services fail |
+| `windows_ad_replication_pending_operations` | Detect AD replication stalls |
+| `windows_net_packets_received_discarded_total` | Network anomaly detection |
+| `windows_logical_disk_free_megabytes` | Prevent log volume exhaustion on SIEM nodes |
+| `windows_os_logged_in_users` | Alert on unexpected active sessions |
+| `windows_process_cpu_time_total` | Detect runaway processes on security hosts |
+| `windows_scheduled_task_last_result` | Alert on failed or modified scheduled tasks |
+| `windows_dns_total_query_received_total` | DNS query volume anomaly |
 
 ---
 
-# Multi Server Monitoring
+## Alerting
 
-| Machine | Role | IP | Port |
-|----------|--------|------------|------|
-| VM-1 | Prometheus | 10.2.0.230 | 9090 |
-| VM-2 | Windows | 10.2.1.18 | 9182 |
-| VM-3 | Windows | 10.2.1.19 | 9182 |
-| VM-4 | Windows | 10.2.1.20 | 9182 |
+Alert rules are in `alerts/windows-exporter-alerts.yml` and are loaded by the central Prometheus rule engine.
 
----
-
-# Open Firewall Port
-
-```bash
-netsh advfirewall firewall add rule name="Windows Exporter 9182" dir=in action=allow protocol=TCP localport=9182
-```
+| Alert | Condition | Severity |
+|---|---|---|
+| `WindowsCriticalServiceDown` | Security-critical service not in `running` state | critical |
+| `WindowsDiskSpaceCritical` | Free disk < 15% on any volume | critical |
+| `WindowsHighMemory` | Available memory < 10% | high |
+| `WindowsADReplicationStalled` | Pending AD replication ops > 0 for 60 min | critical |
+| `WindowsUnexpectedLogon` | Active logged-in users on bastion outside business hours | high |
+| `WindowsScheduledTaskFailed` | Scheduled task last result ≠ 0 for security-related tasks | high |
+| `WindowsDefenderServiceDown` | Windows Defender service not running | critical |
 
 ---
 
-# Prometheus Multi Target Config
+## Grafana Dashboard
 
-```yaml
-global:
-  scrape_interval: 15s
+Import `windows-exporter-dashboard.json` (or use Grafana dashboard ID **14694**) for the Windows overview. Security-specific panels added on top:
 
-scrape_configs:
-  - job_name: "prometheus"
-    static_configs:
-      - targets:
-          - "localhost:9090"
-
-  - job_name: "windows_exporter"
-    static_configs:
-      - targets:
-          - "10.2.1.18:9182"
-          - "10.2.1.19:9182"
-          - "10.2.1.20:9182"
-```
+- **Service health grid** — all security-critical Windows services at a glance
+- **Active sessions tracker** — logged-in users per host over time
+- **AD replication health** — pending operations and last sync time
+- **Disk space forecast** — projected time to full for SIEM data volumes
+- **Process anomaly panel** — processes with unusual CPU or memory compared to baseline
 
 ---
 
-# Restart Prometheus
+## Security Hardening
 
-```bash
-net stop prometheus
-net start prometheus
-```
-
----
-
-# Verify Prometheus Targets
-
-Open:
-
-```bash
-http://10.2.0.230:9090/targets
-```
-
-Expected:
-
-| Job | Instance | Status |
-|------|------------|----------|
-| windows_exporter | 10.2.1.18:9182 | UP |
-| windows_exporter | 10.2.1.19:9182 | UP |
-| windows_exporter | 10.2.1.20:9182 | UP |
+- Windows Exporter runs under a dedicated `svc-winexporter` service account with no interactive login and read-only access to WMI
+- The metrics port (`9182`) is bound to localhost only; Prometheus accesses it over a TLS-secured reverse proxy or direct scrape with NetworkPolicy enforcement
+- Windows Firewall inbound rules permit port `9182` only from the Prometheus server IP
+- Collector configuration disables any collector that exposes sensitive process arguments or environment variables
 
 ---
 
-# Grafana Integration
-
-Your Grafana dashboards will automatically show all Windows servers.
-
-Filters:
-
-- instance
-- hostname
-- job
-
----
-
-# Architecture
-
-```text
-Windows Server → Windows Exporter
-Windows Server → Windows Exporter
-Windows Server → Windows Exporter
-        ↓
-   Prometheus Server
-        ↓
-      Grafana
-```
-
----
-
-# ✅ Summary
-
-Windows Exporter enables Prometheus to monitor Windows infrastructure metrics including:
-
-- CPU
-- Memory
-- Disk
-- Services
-- Network
-- Processes
-
-Combined with Grafana, it provides full Windows monitoring.
+> **Deployment Scale:** Windows Exporter is deployed via Ansible WinRM to all domain-joined Windows security hosts. The target inventory is maintained in `ansible/inventory/` and grouped by security function.
