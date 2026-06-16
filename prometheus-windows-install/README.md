@@ -1,344 +1,117 @@
-# 🚀 Prometheus Installation on Windows Server
+# 🪟 Prometheus Windows Install
 
-![Windows](https://img.shields.io/badge/Platform-Windows-blue)
-![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus-orange)
-![Grafana](https://img.shields.io/badge/Visualization-Grafana-red)
-![Status](https://img.shields.io/badge/Setup-Guide-green)
-
-A complete guide to installing **Prometheus on Windows Server** for infrastructure monitoring.
+> Deploys Prometheus on Windows Server for environments where the primary security monitoring infrastructure runs on Windows, including AD-integrated SIEM nodes and Windows-based PAM servers.
 
 ---
 
-## 📌 Table of Contents
+## 📋 Table of Contents
 
-- Overview
-- Architecture
-- Download Prometheus
-- Extract Prometheus
-- Configure Prometheus
-- Run Prometheus
-- Access Web UI
-- Install as Windows Service
-- Verify Prometheus
-- Add Windows Exporter
-- Useful Queries
-- Default Ports
-- Recommended Architecture
-- Summary
+- [Overview](#overview)
+- [Folder Structure](#folder-structure)
+- [Configuration Files](#configuration-files)
+- [Windows-Specific Scrape Targets](#windows-specific-scrape-targets)
+- [Alerting](#alerting)
+- [Service Management](#service-management)
+- [Security Hardening](#security-hardening)
 
 ---
 
-# 📖 Overview
+## Overview
 
-**Prometheus** is an open-source monitoring and alerting system used to collect metrics from:
+This folder covers the deployment of **Prometheus as a Windows Service** on Windows Server hosts used in the cybersecurity stack. It supplements the Kubernetes-based Prometheus deployment for Windows-only environments — primarily Active Directory, CyberArk PAM, and Windows-based SIEM components — where containerized deployment is not feasible.
 
-- Servers  
-- Applications  
-- Network Devices  
-- Cloud Infrastructure  
-
-Prometheus stores metrics as **time-series data** and supports querying through:
-
-- PromQL  
-- Grafana dashboards  
-- Alertmanager integrations  
-
-Although Prometheus is commonly installed on Linux, it can also run on **Windows Server**.
+Prometheus on Windows scrapes:
+- The **Windows Exporter** (running locally or on target hosts)
+- Windows-specific security exporters (Active Directory, CyberArk)
+- Any HTTP-based exporter reachable from the Windows host
 
 ---
 
-# 🏗 Prometheus Architecture
+## Folder Structure
 
-```text
-Servers / Applications
-        │
-        │ Metrics
-        ▼
-Exporters (Node Exporter / Windows Exporter)
-        │
-        ▼
-Prometheus Server
-        │
-        ▼
-Alertmanager
-        │
-        ▼
-Grafana Dashboards
+```
+prometheus-windows-install/
+├── prometheus.yml             # Windows-specific Prometheus configuration
+├── rules/
+│   ├── windows-alerts.yml     # Windows host alert rules
+│   └── ad-alerts.yml          # Active Directory specific alerts
+├── nssm/
+│   └── install-service.md     # Steps to register Prometheus as a Windows service via NSSM
+├── tls/
+│   └── tls-config.md          # TLS setup for Windows (cert store integration)
+└── README.md
 ```
 
 ---
 
-# 📥 Download Prometheus
+## Configuration Files
 
-Download Prometheus from the official release page:
+### `prometheus.yml`
 
-[Prometheus Releases](https://github.com/prometheus/prometheus/releases?utm_source=chatgpt.com)
+Configured for the Windows environment with these adaptations:
 
-Download the Windows package:
+- Storage path set to `C:\prometheus\data`
+- Log format set to `json` for compatibility with Windows Event Forwarder
+- Scrape targets reference Windows Exporter and AD Exporter on localhost and domain-joined hosts
+- Remote write configured to send metrics to the central Thanos Receiver over HTTPS
 
-```bash
-prometheus.windows-amd64.zip
-```
+### `rules/windows-alerts.yml`
 
-Example:
+Alert rules specific to Windows infrastructure. Covers Windows service states, event log error rates, and Active Directory health.
 
-```bash
-prometheus-3.9.1.windows-amd64.zip
-```
+### `rules/ad-alerts.yml`
 
----
-
-# 📂 Extract Prometheus
-
-Copy the ZIP file to your Windows server.
-
-Example location:
-
-```bash
-C:\Prometheus
-```
-
-Extract the package.
-
-### Folder Structure
-
-```bash
-C:\Prometheus
-├── prometheus.exe
-├── promtool.exe
-├── prometheus.yml
-├── consoles
-└── console_libraries
-```
+Dedicated rules for Active Directory observability, covering replication lag, failed authentication rates, and domain controller availability.
 
 ---
 
-# ⚙ Configure Prometheus
+## Windows-Specific Scrape Targets
 
-Open:
-
-```bash
-prometheus.yml
-```
-
-Example configuration:
-
-```yaml
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: "prometheus"
-
-    static_configs:
-      - targets: ["localhost:9090"]
-```
-
-This configuration allows Prometheus to monitor itself.
+| Target | Exporter | Port | Metrics |
+|---|---|---|---|
+| Windows AD servers | windows-exporter | 9182 | CPU, memory, disk, services |
+| Active Directory | ad-exporter | 9166 | Replication, auth failures, DC health |
+| CyberArk PAM | cyberark-exporter | 9190 | Session counts, vault connectivity, failures |
+| IIS (if applicable) | windows-exporter | 9182 | Request rates, errors, response times |
+| Windows Defender | windows-exporter | 9182 | Threat detection events, update status |
 
 ---
 
-# ▶ Run Prometheus on Windows
+## Alerting
 
-Open **PowerShell** or **Command Prompt**
-
-```powershell
-cd C:\Prometheus
-```
-
-Start Prometheus:
-
-```powershell
-prometheus.exe --config.file=prometheus.yml
-```
-
-Prometheus runs on:
-
-```bash
-9090
-```
+| Alert | Condition | Severity |
+|---|---|---|
+| `WindowsServiceDown` | Critical Windows service not running | critical |
+| `ADReplicationFailing` | AD replication lag > 60 minutes | critical |
+| `ADAuthFailureSurge` | Failed logins > 100 in 5 minutes | high |
+| `CyberArkVaultUnreachable` | PAM vault connection failing | critical |
+| `WindowsDiskFull` | Disk free < 15% on any volume | critical |
+| `WindowsHighCPU` | CPU > 90% for 10 minutes | high |
+| `DefenderThreatDetected` | Defender threat event count increasing | high |
 
 ---
 
-# 🌐 Access Prometheus Web Interface
+## Service Management
 
-Open your browser:
+Prometheus runs as a **Windows Service** registered via NSSM (Non-Sucking Service Manager). This ensures it:
 
-```bash
-http://localhost:9090
-```
+- Starts automatically on Windows boot
+- Restarts on crash with configurable delay
+- Logs stdout/stderr to the Windows Event Log
+- Runs under a dedicated low-privilege service account (`svc-prometheus`)
 
-You should see the Prometheus dashboard.
-
----
-
-# 🔧 Run Prometheus as Windows Service (Recommended)
-
-Prometheus can be installed as a Windows service using **NSSM**.
-
-## What is NSSM?
-
-**Non-Sucking Service Manager (NSSM)** helps run applications as Windows services.
-
-Download NSSM:
-
-[NSSM Download](https://nssm.cc/download)
+Service management commands are documented in `nssm/install-service.md`.
 
 ---
 
-## Extract NSSM
+## Security Hardening
 
-Create directory:
-
-```bash
-C:\nssm
-```
-
-Move `nssm.exe` from the extracted package to this folder.
+- Prometheus runs under a dedicated `svc-prometheus` account with no interactive login rights
+- The metrics HTTP port is bound to `localhost` only — not exposed on network interfaces
+- Windows Firewall rules restrict access to the storage and config directories to the service account only
+- Remote write to Thanos uses a client certificate issued by the internal PKI
+- Prometheus config directory ACLs are set to deny write access to all accounts except `svc-prometheus` and Domain Admins
 
 ---
 
-## Create Prometheus Service
-
-Open **Terminal as Administrator**
-
-```powershell
-cd C:\nssm
-```
-
-Run:
-
-```powershell
-.\nssm.exe install Prometheus
-```
-
-Configure:
-
-| Field | Value |
-|--------|---------|
-| Path | C:\Prometheus\prometheus.exe |
-| Startup Directory | C:\Prometheus |
-| Arguments | --config.file=C:\Prometheus\prometheus.yml |
-
-Click **Install Service**
-
----
-
-## Start Service
-
-```powershell
-net start Prometheus
-```
-
-Check services:
-
-```powershell
-services.msc
-```
-
----
-
-# ✅ Verify Prometheus
-
-Open:
-
-```bash
-http://SERVER-IP:9090
-```
-
-Navigate to:
-
-```bash
-Status → Targets
-```
-
-Expected output:
-
-```bash
-prometheus → UP
-```
-
----
-
-# 🖥 Add Windows Monitoring
-
-Install :contentReference[oaicite:2]{index=2} for monitoring Windows systems.
-
-Default Port:
-
-```bash
-9182
-```
-
-Example configuration:
-
-```yaml
-scrape_configs:
-  - job_name: "windows_servers"
-
-    static_configs:
-      - targets:
-        - "192.168.1.10:9182"
-```
-
----
-
-# 📊 Useful PromQL Queries
-
-### CPU Usage
-
-```promql
-rate(process_cpu_seconds_total[5m])
-```
-
-### Memory Usage
-
-```promql
-process_resident_memory_bytes
-```
-
-### System Uptime
-
-```promql
-process_start_time_seconds
-```
-
----
-
-# 🔌 Default Ports
-
-| Service | Port |
-|----------|--------|
-| Prometheus | 9090 |
-| Windows Exporter | 9182 |
-| Grafana | 3000 |
-
----
-
-# 🏢 Recommended Monitoring Stack
-
-```text
-Windows / Linux Servers
-        │
-    Exporters
-        │
-    Prometheus Server
-        │
-    Alertmanager
-        │
-    Grafana Dashboards
-```
-
----
-
-# ✅ Summary
-
-Prometheus can run directly on Windows Server for infrastructure monitoring.
-
-When integrated with:
-
-- :contentReference[oaicite:3]{index=3}  
-- :contentReference[oaicite:4]{index=4}  
-- :contentReference[oaicite:5]{index=5}  
-
-…it becomes a complete monitoring solution for servers and applications.
+> **Active Directory Integration:** Prometheus on Windows is domain-joined, allowing it to use Kerberos-based authentication when scraping AD Exporter endpoints on other domain controllers.
